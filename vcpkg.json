@@ -1,0 +1,8 @@
+{
+  "name": "chess-abdullah",
+  "version": "1.0.0",
+  "dependencies": [
+    "sfml"
+  ],
+  "builtin-baseline": "81e3c888ef717a026eb57bb2f3cb0dbd30246271"
+}
