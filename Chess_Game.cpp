@@ -3,17 +3,21 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <optional>
 using namespace sf;
 using namespace std;
 const int TILE_SIZE = 80;
 const int BOARD_SIZE = 8;
 const int WINDOW_SIZE = TILE_SIZE * BOARD_SIZE;
 const int MAX_MOVES = 64; // Maximum possible moves for a piece
+
+const string path_to_save_file = "savefile.txt";
+
 int moveCount = 0;
 int whiteScore = 0;
 int blackScore = 0;
 SoundBuffer moveSoundBuffer, captureSoundBuffer, startSoundBuffer, mateSoundBuffer, backmusicBuffer, promotionSoundBuffer, typingBuffer, clickBuffer, menuSoundBuffer;
-Sound moveSound, checkSound, startSound, mateSound, backmusic, captureSound, promotionSound;
+optional<Sound> moveSound, checkSound, startSound, mateSound, backmusic, captureSound, promotionSound;
 struct Move {
     int x, y;
 };
@@ -28,41 +32,41 @@ Texture loadTexture(const string& filePath) {
 }
 //starting interface
 bool startMenu(string& player1, string& player2) {
-    RenderWindow menuWindow(VideoMode(800, 800), "Game - Start Menu");
+    RenderWindow menuWindow(VideoMode({800, 800}), "Game - Start Menu");
     Font font;
-    if (!font.loadFromFile("D:/assets/font.otf")) { // Load a font
+    if (!font.openFromFile("assets/s/font.otf")) { // Load a font
         cerr << "Failed to load font!" << endl;
         return false;
     }
     Texture buttonTexture;
-    if (!buttonTexture.loadFromFile("D:/assets/New/start.png")) {
+    if (!buttonTexture.loadFromFile("assets/s/New/start.png")) {
         cerr << "Failed to load button texture!" << endl;
         return false;
     }
     Sprite startButton(buttonTexture);
-    startButton.setPosition(300, 600);
+    startButton.setPosition({300.f, 600.f});
     Texture backgroundTexture;
-    if (!backgroundTexture.loadFromFile("D:/assets/New/RonnyPic1 (1).jpg")) {
+    if (!backgroundTexture.loadFromFile("assets/s/New/RonnyPic1 (1).jpg")) {
         cerr << "Failed to load background texture!" << endl;
         return false;
     }
     Sprite background(backgroundTexture);
     background.setColor(Color(255, 255, 255, 125));
-    background.setScale(800.0f / backgroundTexture.getSize().x, 800.0f / backgroundTexture.getSize().y);
+    background.setScale({800.0f / backgroundTexture.getSize().x, 800.0f / backgroundTexture.getSize().y});
 
-    Text title("Chess", font, 75);
-    title.setPosition(400 - title.getGlobalBounds().width / 2, 180);
+    Text title(font, "Chess", 75);
+    title.setPosition({400.f - title.getGlobalBounds().size.x / 2.f, 180.f});
 
-    Text prompt1("Player A= ", font, 42.5);
-    prompt1.setPosition(50, 350);
-    Text prompt2("Player B= ", font, 42.5);
-    prompt2.setPosition(50, 420);
+    Text prompt1(font, "Player A= ", 42);
+    prompt1.setPosition({50.f, 350.f});
+    Text prompt2(font, "Player B= ", 42);
+    prompt2.setPosition({50.f, 420.f});
 
-    Text player1Text("", font, 42.5);
-    player1Text.setPosition(350, 352.5);
-    Text player2Text("", font, 42.5);
-    player2Text.setPosition(350, 422.5);
-    if (!typingBuffer.loadFromFile("D:/assets/New/typing.mp3") || !clickBuffer.loadFromFile("D:/assets/New/click.mp3") || (!menuSoundBuffer.loadFromFile("D:/assets/New/Background Music.mp3"))) {
+    Text player1Text(font, "", 42);
+    player1Text.setPosition({350.f, 352.5f});
+    Text player2Text(font, "", 42);
+    player2Text.setPosition({350.f, 422.5f});
+    if (!typingBuffer.loadFromFile("assets/s/New/typing.mp3") || !clickBuffer.loadFromFile("assets/s/New/click.mp3") || (!menuSoundBuffer.loadFromFile("assets/s/New/Background Music.mp3"))) {
         cerr << "Failed to load sound effects!" << endl;
         return false;
     }
@@ -70,57 +74,62 @@ bool startMenu(string& player1, string& player2) {
     Sound clickSound(clickBuffer);
     Sound menuSound(menuSoundBuffer);
     menuSound.setVolume(30.f);
-    menuSound.setLoop(true); // Loop the menu sound
+    menuSound.setLooping(true); // Loop the menu sound
     menuSound.play(); // Play the menu sound
     bool isPlayer1Input = true;
     while (menuWindow.isOpen()) {
-        Event event;
-        while (menuWindow.pollEvent(event)) {
-            if (event.type == Event::Closed) {
+        while (const std::optional event = menuWindow.pollEvent()) {
+            if (event->is<Event::Closed>()) {
                 menuWindow.close();
                 return false; // Exit if the menu window is closed
             }
-            if (isPlayer1Input && event.type == Event::TextEntered) {
-                if (event.text.unicode < 128) {
-                    if (event.text.unicode == '\b' && !player1.empty()) {
-                        player1.pop_back();
+            if (const auto* textEntered = event->getIf<Event::TextEntered>()) {
+                if (isPlayer1Input) {
+                    if (textEntered->unicode < 128) {
+                        if (textEntered->unicode == '\b' && !player1.empty()) {
+                            player1.pop_back();
+                        }
+                        else if (player1.length() < 20) {
+                            player1 += static_cast<char>(textEntered->unicode);
+                            typingSound.play();
+                        }
+                        player1Text.setString(player1);
                     }
-                    else if (player1.length() < 20) {
-                        player1 += static_cast<char>(event.text.unicode);
-                        typingSound.play();
+                }
+                else {
+                    if (textEntered->unicode < 128) {
+                        if (textEntered->unicode == '\b' && !player2.empty()) {
+                            player2.pop_back();
+                        }
+                        else if (player2.length() < 20) {
+                            player2 += static_cast<char>(textEntered->unicode);
+                            typingSound.play();
+                        }
+                        player2Text.setString(player2);
                     }
-                    player1Text.setString(player1);
                 }
             }
-            else if (!isPlayer1Input && event.type == Event::TextEntered) {
-                if (event.text.unicode < 128) {
-                    if (event.text.unicode == '\b' && !player2.empty()) {
-                        player2.pop_back();
+            if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
+                if (keyPressed->code == Keyboard::Key::Enter) {
+                    if (isPlayer1Input && !player1.empty()) {
+                        isPlayer1Input = false;
                     }
-                    else if (player2.length() < 20) {
-                        player2 += static_cast<char>(event.text.unicode);
-                        typingSound.play();
+                    else if (!isPlayer1Input && !player2.empty()) {
+                        cout << "Game started!!!" << endl;
+                        menuWindow.close();
+                        clickSound.play();
+                        return true; // Start the game
                     }
-                    player2Text.setString(player2);
                 }
             }
-            if (event.type == Event::KeyPressed && event.key.code == Keyboard::Enter) {
-                if (isPlayer1Input && !player1.empty()) {
-                    isPlayer1Input = false;
-                }
-                else if (!isPlayer1Input && !player2.empty()) {
-                    cout << "Game started!!!" << endl;
-                    menuWindow.close();
-                    clickSound.play();
-                    return true; // Start the game
-                }
-            }
-            if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
-                if (startButton.getGlobalBounds().contains(event.mouseButton.x, event.mouseButton.y) && !player1.empty() && !player2.empty()) {
-                    cout << "Game started!!!" << endl;
-                    clickSound.play();
-                    menuWindow.close();
-                    return true; // Start the game
+            if (const auto* mouseButtonPressed = event->getIf<Event::MouseButtonPressed>()) {
+                if (mouseButtonPressed->button == Mouse::Button::Left) {
+                    if (startButton.getGlobalBounds().contains(static_cast<Vector2f>(mouseButtonPressed->position)) && !player1.empty() && !player2.empty()) {
+                        cout << "Game started!!!" << endl;
+                        clickSound.play();
+                        menuWindow.close();
+                        return true; // Start the game
+                    }
                 }
             }
         }
@@ -151,14 +160,15 @@ int getPieceValue(int piece) {
 // Initialize the chessboard and pieces
 void initializeBoard(int board[BOARD_SIZE][BOARD_SIZE]) {
     int initialBoard[BOARD_SIZE][BOARD_SIZE] = {
-        { 2, 3, 4, 5, 6, 4, 3, 2 }, // Black back rank
-        { 1, 1, 1, 1, 1, 1, 1, 1 }, // Black pawns
-        { 0, 0, 0, 0, 0, 0, 0, 0 },
-        { 0, 0, 0, 0, 0, 0, 0, 0 },
-        { 0, 0, 0, 0, 0, 0, 0, 0 },
-        { 0, 0, 0, 0, 0, 0, 0, 0 },
-        { 7, 7, 7, 7, 7, 7, 7, 7 }, // White pawns
-      { 8, 9, 10, 11, 12, 10, 9, 8 } // White back rank
+    //    0  1  2  3  4  5  6  7
+        { 2, 3, 4, 5, 6, 4, 3, 2 }, // 0    // Black back rank
+        { 1, 1, 1, 1, 1, 1, 1, 1 }, // 1    // Black pawns
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, // 2     
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, // 3     
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, // 4     
+        { 0, 0, 0, 0, 0, 0, 0, 0 }, // 5     
+        { 7, 7, 7, 7, 7, 7, 7, 7 }, // 6     // White pawns
+      { 8, 9, 10, 11, 12, 10, 9, 8 }// 7    // White back rank
     };
     // Manual copy using nested loops
     for (int i = 0; i < BOARD_SIZE; ++i) {
@@ -168,12 +178,18 @@ void initializeBoard(int board[BOARD_SIZE][BOARD_SIZE]) {
     }
 }
 // Check if a position is within bounds
-bool isWithinBounds(int x, int y) {
+bool isWithinBounds(int x, int y, int board[BOARD_SIZE][BOARD_SIZE]) {
     return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE;
+}
+
+// Checking if the sqaure is empty or not, currently for Checking use, but should be refactored to be used for move generation as well.
+bool isSquareEmpty(int x, int y, int board[BOARD_SIZE][BOARD_SIZE]){
+    if(isWithinBounds(x, y, board)) return (board[x][y] == 0); // routine check to avoid programmatic errors.
+    return false;
 }
 // Add a move if valid
 void addMove(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount, bool isWhite) {
-    if (isWithinBounds(x, y)) {
+    if (isWithinBounds(x, y, board)) {
         if (board[y][x] == 0 || (isWhite && board[y][x] <= 6) || (!isWhite && board[y][x] >= 7)) {
             legalMoves[moveCount++] = { x, y };
         }
@@ -184,18 +200,18 @@ void getPawnMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMov
     int direction = isWhite ? -1 : 1; // Direction of pawn movement
     int startRow = isWhite ? 6 : 1;  // Starting row for double moves
     // Move forward one square
-    if (isWithinBounds(x, y + direction) && board[y + direction][x] == 0) {
+    if (isWithinBounds(x, y + direction, board) && board[y + direction][x] == 0) {
         legalMoves[moveCount++] = { x, y + direction };
         // Move forward two squares if on initial position
-        if (y == startRow && isWithinBounds(x, y + 2 * direction) && board[y + 2 * direction][x] == 0) {
+        if (y == startRow && isWithinBounds(x, y + 2 * direction, board) && board[y + 2 * direction][x] == 0) {
             legalMoves[moveCount++] = { x, y + 2 * direction };
         }
     }
     // Capture diagonally
-    if (isWithinBounds(x - 1, y + direction) && board[y + direction][x - 1] != 0 && ((isWhite && board[y + direction][x - 1] <= 6) || (!isWhite && board[y + direction][x - 1] >= 7))) {
+    if (isWithinBounds(x - 1, y + direction, board) && board[y + direction][x - 1] != 0 && ((isWhite && board[y + direction][x - 1] <= 6) || (!isWhite && board[y + direction][x - 1] >= 7))) {
         legalMoves[moveCount++] = { x - 1, y + direction };
     }
-    if (isWithinBounds(x + 1, y + direction) && board[y + direction][x + 1] != 0 && ((isWhite && board[y + direction][x + 1] <= 6) || (!isWhite && board[y + direction][x + 1] >= 7))) {
+    if (isWithinBounds(x + 1, y + direction, board) && board[y + direction][x + 1] != 0 && ((isWhite && board[y + direction][x + 1] <= 6) || (!isWhite && board[y + direction][x + 1] >= 7))) {
         legalMoves[moveCount++] = { x + 1, y + direction };
     }
 }
@@ -207,7 +223,7 @@ void getRookMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMov
         while (true) {
             nx += directions[d][0];
             ny += directions[d][1];
-            if (!isWithinBounds(nx, ny) || (board[ny][nx] != 0 &&
+            if (!isWithinBounds(nx, ny, board) || (board[ny][nx] != 0 &&
                 ((isWhite && board[ny][nx] > 6) || (!isWhite && board[ny][nx] < 7)))) {
                 break;
             }
@@ -230,7 +246,7 @@ void getBishopMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalM
             for (int i = 1; i < BOARD_SIZE; i++) {
                 int nx = x + dx * i;
                 int ny = y + dy * i;
-                if (isWithinBounds(nx, ny)) {
+                if (isWithinBounds(nx, ny, board)) {
                     if (board[ny][nx] == 0) {
                         legalMoves[moveCount++] = { nx, ny };
                     }
@@ -250,15 +266,42 @@ void getQueenMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMo
     getRookMoves(x, y, board, legalMoves, moveCount, isWhite);
     getBishopMoves(x, y, board, legalMoves, moveCount, isWhite);
 }
+bool hasKingMoved[2] = { false, false }; //Two values, for white and black king.
+bool hasBlackRookMoved[2] = { false, false }; //Two values, for left and right black rook.
+bool hasWhiteRookMoved[2] = { false, false }; //Two values, for left and right white rook.
+
+bool isKingInCheck(bool isWhiteKing, int board[BOARD_SIZE][BOARD_SIZE]);
+bool isSquareInCheck(bool isWhite, int targetX, int targetY, int board[BOARD_SIZE][BOARD_SIZE]);
+
+bool canCastle(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount, bool isWhite) {
+    if (isKingInCheck(isWhite, board)) return false;
+    if (isWhite && !hasKingMoved[0] && !hasWhiteRookMoved[0] && isSquareEmpty(7, 5, board) && isSquareEmpty(7, 6, board) && !isSquareInCheck(isWhite, 7, 4, board) && !isSquareInCheck(isWhite, 7, 5, board) && !isSquareInCheck(isWhite, 7, 6, board)) {
+        legalMoves[moveCount++] = { 7, 6 }; // White kingside castling
+    }
+    if (isWhite && !hasKingMoved[0] && !hasWhiteRookMoved[1] && isSquareEmpty(7, 1, board) && isSquareEmpty(7, 2, board) && isSquareEmpty(7, 3, board) && !isSquareInCheck(isWhite, 7, 4, board) && !isSquareInCheck(isWhite, 7, 3, board) && !isSquareInCheck(isWhite, 7, 2, board) && !isSquareInCheck(isWhite, 7, 1, board)) {
+        legalMoves[moveCount++] = { 7, 2 }; // White queenside castling
+    }
+    if (!isWhite && !hasKingMoved[1] && !hasBlackRookMoved[0] && isSquareEmpty(0, 5, board) && isSquareEmpty(0, 6, board) && !isSquareInCheck(isWhite, 0, 4, board) && !isSquareInCheck(isWhite, 0, 5, board) && !isSquareInCheck(isWhite, 0, 6, board)) {
+        legalMoves[moveCount++] = { 0, 6 }; // Black kingside castling
+    }
+    if (!isWhite && !hasKingMoved[1] && !hasBlackRookMoved[1] && isSquareEmpty(0, 1, board) && isSquareEmpty(0, 2, board) && isSquareEmpty(0, 3, board) && !isSquareInCheck(isWhite, 0, 4, board) && !isSquareInCheck(isWhite, 0, 3, board) && !isSquareInCheck(isWhite, 0, 2, board) && !isSquareInCheck(isWhite, 0, 1, board)) {
+        legalMoves[moveCount++] = { 0, 2 }; // Black queenside castling
+    }
+    return false;
+}
+
 // Get moves for a king
-void getKingMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount, bool isWhite) {
+void getKingMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount, bool isWhite, bool includeCastling = true) {
     int directions[8][2] = { {1, 0}, {0, 1}, {-1, 0}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1} };
     for (int i = 0; i < 8; ++i) {
         addMove(x + directions[i][0], y + directions[i][1], board, legalMoves, moveCount, isWhite);
     }
+    if (includeCastling) {
+        canCastle(x, y, board, legalMoves, moveCount, isWhite);
+    }
 }
-// Get all possible legal moves for a piece
-void getLegalMoves(int piece, int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount) {
+
+void getLegalMoves(int piece, int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount, bool includeCastling = true) {
     moveCount = 0;
     bool isWhite = (piece >= 7);
     switch (piece % 6) {
@@ -267,9 +310,35 @@ void getLegalMoves(int piece, int x, int y, int board[BOARD_SIZE][BOARD_SIZE], M
     case 3: getKnightMoves(x, y, board, legalMoves, moveCount, isWhite); break;
     case 4: getBishopMoves(x, y, board, legalMoves, moveCount, isWhite); break;
     case 5: getQueenMoves(x, y, board, legalMoves, moveCount, isWhite); break;
-    case 0: getKingMoves(x, y, board, legalMoves, moveCount, isWhite); break;
+    case 0: getKingMoves(x, y, board, legalMoves, moveCount, isWhite, includeCastling); break;
     }
 }
+
+//enemy controlled squares
+bool isSquareInCheck(bool isWhite, int targetX, int targetY, int board[BOARD_SIZE][BOARD_SIZE]) {
+    // Iterate through the board to find all opponent pieces
+    for (int y = 0; y < BOARD_SIZE; ++y) {
+        for (int x = 0; x < BOARD_SIZE; ++x) {
+            int piece = board[y][x];
+            // Check if the piece belongs to the opponent
+            if ((isWhite && piece > 0 && piece <= 6) || (!isWhite && piece >= 7)) {
+                Move legalMoves[MAX_MOVES];
+                int moveCount = 0;
+                getLegalMoves(piece, x, y, board, legalMoves, moveCount, false);
+                // Check if any of the legal moves can attack the target square
+                for (int i = 0; i < moveCount; ++i) {
+                    if (legalMoves[i].x == targetX && legalMoves[i].y == targetY) {
+                        return true; // Square is in check
+                    }
+                }
+            }
+        }
+    }
+    return false; // Square is not in check
+}
+
+// Get all possible legal moves for a piece
+
 //pawn promotion function
 void promotePawn(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], bool& isWhiteTurn, Texture whitePromotionTextures[], Texture blackPromotionTextures[]) {
     // Check if the piece at the given position is a pawn
@@ -277,18 +346,17 @@ void promotePawn(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], bool& isWhiteT
     if (board[y][x] == pawnValue) { // Ensure the piece is a pawn
         if ((isWhiteTurn && y == 0) || (!isWhiteTurn && y == 7)) {
             // Display promotion options
-            RenderWindow window_1(VideoMode(320, 80), "Choose the piece for promotion");
+            RenderWindow window_1(VideoMode({320, 80}), "Choose the piece for promotion");
             bool promoting = true;
             while (promoting) {
-                Event event;
-                while (window_1.pollEvent(event)) {
-                    if (event.type == Event::Closed) {
+                while (const std::optional event = window_1.pollEvent()) {
+                    if (event->is<Event::Closed>()) {
                         window_1.close();
                         promoting = false; // Exit the promotion loop if the window is closed
                     }
-                    if (event.type == Event::MouseButtonPressed) {
-                        if (event.mouseButton.button == Mouse::Left) {
-                            Vector2i mousePos = Mouse::getPosition(window_1);
+                    if (const auto* mouseButtonPressed = event->getIf<Event::MouseButtonPressed>()) {
+                        if (mouseButtonPressed->button == Mouse::Button::Left) {
+                            Vector2i mousePos = mouseButtonPressed->position;
                             // Check which promotion image was clicked
                             Texture* currentPromotionTextures = isWhiteTurn ? whitePromotionTextures : blackPromotionTextures;
                             for (int i = 0; i < 4; ++i) {
@@ -296,10 +364,10 @@ void promotePawn(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], bool& isWhiteT
                                 int imageWidth = 80; // Width of each image
                                 int imageHeight = 80; // Height of each image
                                 int imageX = 5 + i * imageWidth; // X position of the image
-                                int imageY = (window_1.getSize().y - imageHeight) / 2; // Centered vertically
+                                int imageY = (static_cast<int>(window_1.getSize().y) - imageHeight) / 2; // Centered vertically
                                 // Check if the mouse is within the bounds of the image
                                 if (mousePos.x >= imageX && mousePos.x <= imageX + imageWidth && mousePos.y >= imageY && mousePos.y <= imageY + imageHeight) {
-                                    promotionSound.play();
+                                    promotionSound->play();
                                     if (i == 0) {
                                         board[y][x] = (isWhiteTurn) ? 8 : 2; // Rook promotion
                                         if (isWhiteTurn) whiteScore += getPieceValue(8) - 1; // Add rook value to white score
@@ -334,8 +402,8 @@ void promotePawn(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], bool& isWhiteT
                     Sprite promotionSprite(currentPromotionTextures[i]);
                     // Calculate the position based on the window size
                     int imageX = 5 + i * 80; // X position of the image
-                    int imageY = (window_1.getSize().y - 80) / 2; // Centered vertically
-                    promotionSprite.setPosition(imageX, imageY); // Position
+                    int imageY = (static_cast<int>(window_1.getSize().y) - 80) / 2; // Centered vertically
+                    promotionSprite.setPosition({static_cast<float>(imageX), static_cast<float>(imageY)}); // Position
                     window_1.draw(promotionSprite);
                 }
                 window_1.display();
@@ -379,28 +447,7 @@ bool isKingInCheck(bool isWhiteKing, int board[BOARD_SIZE][BOARD_SIZE]) {
     }
     return false;
 }
-//enemy controlled squares
-bool isSquareInCheck(bool isWhite, int targetX, int targetY, int board[BOARD_SIZE][BOARD_SIZE]) {
-    // Iterate through the board to find all opponent pieces
-    for (int y = 0; y < BOARD_SIZE; ++y) {
-        for (int x = 0; x < BOARD_SIZE; ++x) {
-            int piece = board[y][x];
-            // Check if the piece belongs to the opponent
-            if ((isWhite && piece > 0 && piece <= 6) || (!isWhite && piece >= 7)) {
-                Move legalMoves[MAX_MOVES];
-                int moveCount = 0;
-                getLegalMoves(piece, x, y, board, legalMoves, moveCount);
-                // Check if any of the legal moves can attack the target square
-                for (int i = 0; i < moveCount; ++i) {
-                    if (legalMoves[i].x == targetX && legalMoves[i].y == targetY) {
-                        return true; // Square is in check
-                    }
-                }
-            }
-        }
-    }
-    return false; // Square is not in check
-}
+
 //restritct moves of other pieces
 void filterMovesToProtectKing(int board[BOARD_SIZE][BOARD_SIZE], Move legalMoves[], int& moveCount, int pieceX, int pieceY, bool isWhiteTurn) {
     Move filteredMoves[MAX_MOVES];
@@ -464,21 +511,19 @@ bool isMoveLegal(int x, int y, Move legalMoves[], int moveCount) {
     }
     return false;
 }
-//genera function to add a new window
+//generate function to add a new window
 int new_window(int x, int y, int z, const string& name, string filepath) {
-    RenderWindow window(VideoMode(x, y), name);
+    RenderWindow window(VideoMode({static_cast<unsigned int>(x), static_cast<unsigned int>(y)}), name);
     Texture texture;
     if (!texture.loadFromFile(filepath)) {
         cerr << "Error: Could not load the image!" << endl;
         return -1;
     }
-    Sprite sprite;
-    sprite.setTexture(texture);
+    Sprite sprite(texture);
     Clock clock;
     while (window.isOpen()) {
-        Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == Event::Closed) {
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<Event::Closed>()) {
                 window.close();
             }
         }
@@ -489,6 +534,7 @@ int new_window(int x, int y, int z, const string& name, string filepath) {
         window.draw(sprite);
         window.display();
     }
+    return 0;
 }
 // Function to save the game state to a file
 void saveGame(const string& filePath, const string& player1, const string& player2, int board[BOARD_SIZE][BOARD_SIZE], int whiteScore, int blackScore) {
@@ -539,26 +585,26 @@ bool loadGame(const string& filePath, string& player1, string& player2, int boar
 //main function
 int main() {
     Font font;
-    if (!font.loadFromFile("D:/assets/New/Campus A.ttf")) { // Load a font
+    if (!font.openFromFile("assets/s/New/Campus A.ttf")) { // Load a font
         cerr << "Failed to load font!" << endl;
         return false;
     }
     bool isWhiteTurn = true;
-    Text whiteScoreText("White Score: 0", font, 30);
-    Text blackScoreText("Black Score: 0", font, 30);
-    whiteScoreText.setPosition(50, 650); // Position for white score
-    blackScoreText.setPosition(360, 650); // Position for black score
+    Text whiteScoreText(font, "White Score: 0", 30);
+    Text blackScoreText(font, "Black Score: 0", 30);
+    whiteScoreText.setPosition({50.f, 650.f}); // Position for white score
+    blackScoreText.setPosition({360.f, 650.f}); // Position for black score
     string player1, player2;
     if (!startMenu(player1, player2)) {
         cout << "Game cannot start. Exiting..." << endl;
         return 0;
     }
-    RenderWindow window(VideoMode(WINDOW_SIZE, WINDOW_SIZE + 50), "Chess by DANYAL & ABDULLAH");
+    RenderWindow window(VideoMode({static_cast<unsigned int>(WINDOW_SIZE), static_cast<unsigned int>(WINDOW_SIZE + 50)}), "Chess by DANYAL & ABDULLAH");
     // Load promotion textures in main
     Texture whitePromotionTextures[4];
     Texture blackPromotionTextures[4];
-    string whitePromotionFiles[4] = { "D:/assets/New/white_rook.png","D:/assets/New/white_knight.png","D:/assets/New/white_bishop.png","D:/assets/New/white_queen.png" };
-    string blackPromotionFiles[4] = { "D:/assets/New/black_rook.png","D:/assets/New/black_knight.png","D:/assets/New/black_bishop.png","D:/assets/New/black_queen.png" };
+    string whitePromotionFiles[4] = { "assets/s/New/white_rook.png","assets/s/New/white_knight.png","assets/s/New/white_bishop.png","assets/s/New/white_queen.png" };
+    string blackPromotionFiles[4] = { "assets/s/New/black_rook.png","assets/s/New/black_knight.png","assets/s/New/black_bishop.png","assets/s/New/black_queen.png" };
     // Load white & black promotion textures
     for (int i = 0; i < 4; ++i) {
         if (!whitePromotionTextures[i].loadFromFile(whitePromotionFiles[i]) || (!blackPromotionTextures[i].loadFromFile(blackPromotionFiles[i]))) {
@@ -566,13 +612,13 @@ int main() {
             return 1;
         }
     }
-    Texture boardTexture = loadTexture("D:/assets/New/board3.png");
+    Texture boardTexture = loadTexture("assets/s/New/board3.png");
     Sprite boardSprite(boardTexture);
-    boardSprite.setScale(WINDOW_SIZE / 640.0f, WINDOW_SIZE / 640.0f);
+    boardSprite.setScale({WINDOW_SIZE / 640.0f, WINDOW_SIZE / 640.0f});
     Texture pieceTextures[12];
     string pieceFiles[12] = {
-        "D:/assets/New/black_pawn.png", "D:/assets/New/black_rook.png", "D:/assets/New/black_knight.png", "D:/assets/New/black_bishop.png", "D:/assets/New/black_queen.png", "D:/assets/New/black_king.png",
-        "D:/assets/New/white_pawn.png", "D:/assets/New/white_rook.png", "D:/assets/New/white_knight.png", "D:/assets/New/white_bishop.png", "D:/assets/New/white_queen.png", "D:/assets/New/white_king.png"
+        "assets/s/New/black_pawn.png", "assets/s/New/black_rook.png", "assets/s/New/black_knight.png", "assets/s/New/black_bishop.png", "assets/s/New/black_queen.png", "assets/s/New/black_king.png",
+        "assets/s/New/white_pawn.png", "assets/s/New/white_rook.png", "assets/s/New/white_knight.png", "assets/s/New/white_bishop.png", "assets/s/New/white_queen.png", "assets/s/New/white_king.png"
     };
     for (int i = 0; i < 12; ++i) {
         if (!pieceTextures[i].loadFromFile(pieceFiles[i])) {
@@ -581,147 +627,178 @@ int main() {
         }
     }
     // Load the sound buffers
-    if ((!moveSoundBuffer.loadFromFile("D:/assets/New/piece_sound.mp3")) || (!backmusicBuffer.loadFromFile("D:/assets/New/Chess Loop Sound.mp3")) || (!startSoundBuffer.loadFromFile("D:/assets/New/start.mp3")) ||
-        (!mateSoundBuffer.loadFromFile("D:/assets/New/mate.mp3")) || (!moveSoundBuffer.loadFromFile("D:/assets/New/piece_sound.mp3")) || (!promotionSoundBuffer.loadFromFile("D:/assets/New/promote.mp3")) ||
-        (!captureSoundBuffer.loadFromFile("D:/assets/New/capture.mp3"))) {
+    if ((!moveSoundBuffer.loadFromFile("assets/s/New/piece_sound.mp3")) || (!backmusicBuffer.loadFromFile("assets/s/New/Chess Loop Sound.mp3")) || (!startSoundBuffer.loadFromFile("assets/s/New/start.mp3")) ||
+        (!mateSoundBuffer.loadFromFile("assets/s/New/mate.mp3")) || (!moveSoundBuffer.loadFromFile("assets/s/New/piece_sound.mp3")) || (!promotionSoundBuffer.loadFromFile("assets/s/New/promote.mp3")) ||
+        (!captureSoundBuffer.loadFromFile("assets/s/New/capture.mp3"))) {
         cerr << "Failed to load move sound" << endl;
         return 1;
     }
-    captureSound.setBuffer(captureSoundBuffer);
-    promotionSound.setBuffer(promotionSoundBuffer);
-    startSound.setBuffer(startSoundBuffer);
-    moveSound.setBuffer(moveSoundBuffer);
-    checkSound.setBuffer(captureSoundBuffer);
-    mateSound.setBuffer(mateSoundBuffer);
-    backmusic.setBuffer(backmusicBuffer);
-    backmusic.setVolume(20.f);
-    backmusic.setLoop(true); // Set the music to loop
-    backmusic.play(); // Start playing the background music
+    captureSound.emplace(captureSoundBuffer);
+    promotionSound.emplace(promotionSoundBuffer);
+    startSound.emplace(startSoundBuffer);
+    moveSound.emplace(moveSoundBuffer);
+    checkSound.emplace(captureSoundBuffer);
+    mateSound.emplace(mateSoundBuffer);
+    backmusic.emplace(backmusicBuffer);
+    (*backmusic).setVolume(20.f);
+    (*backmusic).setLooping(true); // Set the music to loop
+    (*backmusic).play(); // Start playing the background music
     int board[BOARD_SIZE][BOARD_SIZE];
     initializeBoard(board);
     bool isDragging = false;
     Vector2i dragPiece(-1, -1);
     Vector2i mouseOffset;
     Move legalMoves[MAX_MOVES];
-    Text movecount("Black Score: 0", font, 30);
-    movecount.setPosition(50, 650); // Position for white score
-    startSound.play();
+    Text movecount(font, "Black Score: 0", 30);
+    movecount.setPosition({50.f, 650.f}); // Position for white score
+    (*startSound).play();
     while (window.isOpen()) {
-        Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == Event::Closed)
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<Event::Closed>())
                 window.close();
-            // Check for save game
-            if (event.type == Event::KeyPressed && event.key.code == Keyboard::S) {
-                saveGame("D:/Chess Project 1st Semester/Save Game/chess-game.txt", player1, player2, board, whiteScore, blackScore);
-            }
-            // Check for load game
-            if (event.type == Event::KeyPressed && event.key.code == Keyboard::L) {
-                if (loadGame("D:/Chess Project 1st Semester/Save Game/chess-game.txt", player1, player2, board, whiteScore, blackScore)) {
-                    // After loading the game
-                    whiteScoreText.setString("White Score: " + to_string(whiteScore));
-                    blackScoreText.setString("Black Score: " + to_string(blackScore));
-                    // Reset move history if needed
-                    moveCount = 0; // Reset move count if you want to start fresh
-                    // You may also want to reset the move history array if you are keeping track of moves
+            
+            if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
+                // Check for save game
+                if (keyPressed->code == Keyboard::Key::S) {
+                    saveGame(path_to_save_file, player1, player2, board, whiteScore, blackScore);
+                }
+                // Check for load game
+                if (keyPressed->code == Keyboard::Key::L) {
+                    if (loadGame(path_to_save_file, player1, player2, board, whiteScore, blackScore)) {
+                        // After loading the game
+                        whiteScoreText.setString("White Score: " + to_string(whiteScore));
+                        blackScoreText.setString("Black Score: " + to_string(blackScore));
+                        // Reset move history if needed
+                        moveCount = 0; // Reset move count if you want to start fresh
+                        // You may also want to reset the move history array if you are keeping track of moves
+                    }
                 }
             }
-            if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
-                Vector2i mousePos = Mouse::getPosition(window);
-                int x = mousePos.x / TILE_SIZE;
-                int y = mousePos.y / TILE_SIZE;
-                // Update score text
-                whiteScoreText.setString("White Score: " + to_string(whiteScore));
-                blackScoreText.setString("Black Score: " + to_string(blackScore));
-                if (isWithinBounds(x, y) && board[y][x] != 0) {
-                    bool isWhitePiece = board[y][x] >= 7;
-                    if ((isWhiteTurn && isWhitePiece) || (!isWhiteTurn && !isWhitePiece)) {
-                        isDragging = true;
-                        dragPiece = { x, y };
-                        mouseOffset = mousePos - Vector2i(x * TILE_SIZE, y * TILE_SIZE);
-                        getLegalMoves(board[y][x], x, y, board, legalMoves, moveCount);
-                        if (isKingInCheck(isWhiteTurn, board)) {
-                            filterMovesToProtectKing(board, legalMoves, moveCount, x, y, isWhiteTurn);
 
+            if (const auto* mouseButtonPressed = event->getIf<Event::MouseButtonPressed>()) {
+                if (mouseButtonPressed->button == Mouse::Button::Left) {
+                    Vector2i mousePos = mouseButtonPressed->position;
+                    int x = mousePos.x / TILE_SIZE;
+                    int y = mousePos.y / TILE_SIZE;
+                    // Update score text
+                    whiteScoreText.setString("White Score: " + to_string(whiteScore));
+                    blackScoreText.setString("Black Score: " + to_string(blackScore));
+                    if (isWithinBounds(x, y, board) && board[y][x] != 0) {
+                        bool isWhitePiece = board[y][x] >= 7;
+                        if ((isWhiteTurn && isWhitePiece) || (!isWhiteTurn && !isWhitePiece)) {
+                            isDragging = true;
+                            dragPiece = { x, y };
+                            mouseOffset = mousePos - Vector2i(x * TILE_SIZE, y * TILE_SIZE);
+                            getLegalMoves(board[y][x], x, y, board, legalMoves, moveCount);
+                            if (isKingInCheck(isWhiteTurn, board)) {
+                                filterMovesToProtectKing(board, legalMoves, moveCount, x, y, isWhiteTurn);
+                            }
                         }
                     }
                 }
             }
-            if (event.type == Event::MouseButtonReleased && event.mouseButton.button == Mouse::Left) {
-                if (isDragging) {
-                    int fromX = 0; // Replace with actual logic to get fromX
-                    int fromY = 0; // Replace with actual logic to get fromY
-                    int toX = 1;   // Replace with actual logic to get toX
-                    int toY = 1;   // Replace with actual logic to get toY
-                    Vector2i mousePos = Mouse::getPosition(window);
-                    int newX = mousePos.x / TILE_SIZE;
-                    int newY = mousePos.y / TILE_SIZE;
-                    if (isMoveLegal(newX, newY, legalMoves, moveCount)) {
-                        // Simulate the move
-                        int tempPiece = board[newY][newX];
-                        if (tempPiece != 0) { // If a piece is captured
-                            if (tempPiece > 6) { // Black piece
-                                blackScore += getPieceValue(tempPiece);
-                            }
-                            else { // White piece
-                                whiteScore += getPieceValue(tempPiece);
-                            }
-                            captureSound.play(); // Play capture sound
-                        }
-                        board[newY][newX] = board[dragPiece.y][dragPiece.x];
-                        board[dragPiece.y][dragPiece.x] = 0;
-                        promotePawn(newX, newY, board, isWhiteTurn, whitePromotionTextures, blackPromotionTextures);
-                        moveSound.play();
-                        // Check if the move leaves the king in check
-                        if (isKingInCheck(isWhiteTurn, board)) {
-                            // Undo the move
-                            board[dragPiece.y][dragPiece.x] = board[newY][newX];
-                            board[newY][newX] = tempPiece;
-                        }
-                        else {
-                            // Check if the opponent's king is in check or checkmate
-                            if (isKingInCheck(!isWhiteTurn, board)) {
-                                checkSound.play();
-                                cout << (isWhiteTurn ? "Black" : "White") << "'s king is in check!" << endl;
-                                if (isCheckmate(!isWhiteTurn, board)) {
-                                    mateSound.play();
-                                    string str = "checkmate";
-                                    new_window(395, 300, 2, str, "D:/assets/New/checkmate.png");
-                                    cout << (isWhiteTurn ? player1 : player2) << " congratulations!!!!!" << endl;
-                                    cout << (isWhiteTurn ? player2 : player1) << " is in checkmate " << endl;
-                                    window.close(); // End the game
+
+            if (const auto* mouseButtonReleased = event->getIf<Event::MouseButtonReleased>()) {
+                if (mouseButtonReleased->button == Mouse::Button::Left) {
+                    if (isDragging) {
+                        Vector2i mousePos = mouseButtonReleased->position;
+                        int newX = mousePos.x / TILE_SIZE;
+                        int newY = mousePos.y / TILE_SIZE;
+                        if (isMoveLegal(newX, newY, legalMoves, moveCount)) {
+                            // Simulate the move
+                            int tempPiece = board[newY][newX];
+                            int movedPiece = board[dragPiece.y][dragPiece.x];
+
+                            // Making rook jump for castling
+                            if (movedPiece == 12 || movedPiece == 6) { // King
+                                if (abs(newX - dragPiece.x) == 2) {
+                                    if (newX == 6) { // Kingside
+                                        board[newY][5] = board[newY][7];
+                                        board[newY][7] = 0;
+                                    }
+                                    else if (newX == 2) { // Queenside
+                                        board[newY][3] = board[newY][0];
+                                        board[newY][0] = 0;
+                                    }
                                 }
                             }
-                            // Stalemate feature
-                            if (!isKingInCheck(!isWhiteTurn, board)) {
-                                bool hasLegalMove = false;
-                                for (int y = 0; y < BOARD_SIZE && !hasLegalMove; ++y) {
-                                    for (int x = 0; x < BOARD_SIZE && !hasLegalMove; ++x) {
-                                        int piece = board[y][x];
-                                        if ((!isWhiteTurn && piece >= 7) || (isWhiteTurn && piece > 0 && piece <= 6)) {
-                                            Move legalMoves[MAX_MOVES];
-                                            int moveCount = 0;
-                                            getLegalMoves(piece, x, y, board, legalMoves, moveCount);
-                                            filterMovesToProtectKing(board, legalMoves, moveCount, x, y, !isWhiteTurn);
-                                            if (moveCount > 0) {
-                                                hasLegalMove = true;
+
+                            if (tempPiece != 0) { // If a piece is captured
+                                if (tempPiece > 6) { // Black piece
+                                    blackScore += getPieceValue(tempPiece);
+                                }
+                                else { // White piece
+                                    whiteScore += getPieceValue(tempPiece);
+                                }
+                                (*captureSound).play(); // Play capture sound
+                            }
+                            board[newY][newX] = movedPiece;
+                            board[dragPiece.y][dragPiece.x] = 0;
+                            promotePawn(newX, newY, board, isWhiteTurn, whitePromotionTextures, blackPromotionTextures);
+                            (*moveSound).play();
+
+                            // Update movement flags for castling rules
+                            if (movedPiece == 12) hasKingMoved[0] = true;
+                            if (movedPiece == 6) hasKingMoved[1] = true;
+                            if (movedPiece == 8) {
+                                if (dragPiece.y == 7 && dragPiece.x == 7) hasWhiteRookMoved[0] = true;
+                                if (dragPiece.y == 7 && dragPiece.x == 0) hasWhiteRookMoved[1] = true;
+                            }
+                            if (movedPiece == 2) {
+                                if (dragPiece.y == 0 && dragPiece.x == 7) hasBlackRookMoved[0] = true;
+                                if (dragPiece.y == 0 && dragPiece.x == 0) hasBlackRookMoved[1] = true;
+                            }
+                            // Check if the move leaves the king in check
+                            if (isKingInCheck(isWhiteTurn, board)) {
+                                // Undo the move
+                                board[dragPiece.y][dragPiece.x] = board[newY][newX];
+                                board[newY][newX] = tempPiece;
+                            }
+                            else {
+                                // Check if the opponent's king is in check or checkmate
+                                if (isKingInCheck(!isWhiteTurn, board)) {
+                                    (*checkSound).play();
+                                    cout << (isWhiteTurn ? "Black" : "White") << "'s king is in check!" << endl;
+                                    if (isCheckmate(!isWhiteTurn, board)) {
+                                        (*mateSound).play();
+                                        string str = "checkmate";
+                                        new_window(395, 300, 2, str, "assets/s/New/checkmate.png");
+                                        cout << (isWhiteTurn ? player1 : player2) << " congratulations!!!!!" << endl;
+                                        cout << (isWhiteTurn ? player2 : player1) << " is in checkmate " << endl;
+                                        window.close(); // End the game
+                                    }
+                                }
+                                // Stalemate feature
+                                if (!isKingInCheck(!isWhiteTurn, board)) {
+                                    bool hasLegalMove = false;
+                                    for (int y = 0; y < BOARD_SIZE && !hasLegalMove; ++y) {
+                                        for (int x = 0; x < BOARD_SIZE && !hasLegalMove; ++x) {
+                                            int piece = board[y][x];
+                                            if ((!isWhiteTurn && piece >= 7) || (isWhiteTurn && piece > 0 && piece <= 6)) {
+                                                Move legalMoves[MAX_MOVES];
+                                                int moveCount = 0;
+                                                getLegalMoves(piece, x, y, board, legalMoves, moveCount);
+                                                filterMovesToProtectKing(board, legalMoves, moveCount, x, y, !isWhiteTurn);
+                                                if (moveCount > 0) {
+                                                    hasLegalMove = true;
+                                                }
                                             }
                                         }
                                     }
+                                    if (!hasLegalMove) {
+                                        (*mateSound).play();
+                                        string str = "stalemate";
+                                        new_window(250, 250, 2, str, "assets/s/New/stalemate.png");
+                                        cout << "Stalemate! Game over." << endl;
+                                        window.close(); // End the game
+                                    }
                                 }
-                                if (!hasLegalMove) {
-                                    mateSound.play();
-                                    string str = "stalemate";
-                                    new_window(250, 250, 2, str, "D:/assets/New/stalemate.png");
-                                    cout << "Stalemate! Game over." << endl;
-                                    window.close(); // End the game
-                                }
+                                isWhiteTurn = !isWhiteTurn; // Alternate turn
                             }
-                            isWhiteTurn = !isWhiteTurn; // Alternate turn
                         }
+                        isDragging = false;
+                        dragPiece = { -1, -1 };
                     }
-                    isDragging = false;
-                    dragPiece = { -1, -1 };
                 }
             }
         }
@@ -729,9 +806,9 @@ int main() {
         window.draw(boardSprite);
         // Highlight the king if in check
         if (isKingInCheck(isWhiteTurn, board)) {
-            RectangleShape checkHighlight(Vector2f(TILE_SIZE, TILE_SIZE));
+            RectangleShape checkHighlight({static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE)});
             checkHighlight.setFillColor(Color(255, 0, 0, 128)); // Semi-transparent red
-            checkHighlight.setOrigin(TILE_SIZE / 2, TILE_SIZE / 2);
+            checkHighlight.setOrigin({TILE_SIZE / 2.f, TILE_SIZE / 2.f});
             int kingX = -1, kingY = -1;
             for (int y = 0; y < BOARD_SIZE; ++y) {
                 for (int x = 0; x < BOARD_SIZE; ++x) {
@@ -743,16 +820,16 @@ int main() {
                 }
             }
             if (kingX != -1 && kingY != -1) { // Only draw if the king is found
-                checkHighlight.setPosition(kingX * TILE_SIZE + TILE_SIZE / 2, kingY * TILE_SIZE + TILE_SIZE / 2);
+                checkHighlight.setPosition({kingX * TILE_SIZE + TILE_SIZE / 2.f, kingY * TILE_SIZE + TILE_SIZE / 2.f});
                 window.draw(checkHighlight);
             }
         }
         // Highlight legal moves
         if (isDragging) {
             for (int i = 0; i < moveCount; ++i) {
-                RectangleShape moveHighlight(Vector2f(TILE_SIZE, TILE_SIZE));
+                RectangleShape moveHighlight({static_cast<float>(TILE_SIZE), static_cast<float>(TILE_SIZE)});
                 moveHighlight.setFillColor(Color(0, 255, 0, 128)); // Semi-transparent green
-                moveHighlight.setPosition(legalMoves[i].x * TILE_SIZE, legalMoves[i].y * TILE_SIZE);
+                moveHighlight.setPosition({static_cast<float>(legalMoves[i].x * TILE_SIZE), static_cast<float>(legalMoves[i].y * TILE_SIZE)});
                 window.draw(moveHighlight);
             }
         }
@@ -762,7 +839,7 @@ int main() {
                 int piece = board[y][x];
                 if (piece != 0) {
                     Sprite pieceSprite(pieceTextures[piece - 1]);
-                    pieceSprite.setPosition(x * TILE_SIZE, y * TILE_SIZE);
+                    pieceSprite.setPosition({static_cast<float>(x * TILE_SIZE), static_cast<float>(y * TILE_SIZE)});
                     window.draw(pieceSprite);
                 }
             }
@@ -772,7 +849,7 @@ int main() {
             if (piece != 0) {
                 Sprite pieceSprite(pieceTextures[piece - 1]);
                 Vector2i mousePos = Mouse::getPosition(window);
-                pieceSprite.setPosition(mousePos.x - mouseOffset.x, mousePos.y - mouseOffset.y);
+                pieceSprite.setPosition({static_cast<float>(mousePos.x - mouseOffset.x), static_cast<float>(mousePos.y - mouseOffset.y)});
                 window.draw(pieceSprite);
             }
         }
