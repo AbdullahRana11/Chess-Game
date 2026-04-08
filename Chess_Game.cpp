@@ -661,16 +661,26 @@ int main() {
             }
             if (event.type == Event::MouseButtonReleased && event.mouseButton.button == Mouse::Left) {
                 if (isDragging) {
-                    int fromX = 0; // Replace with actual logic to get fromX
-                    int fromY = 0; // Replace with actual logic to get fromY
-                    int toX = 1;   // Replace with actual logic to get toX
-                    int toY = 1;   // Replace with actual logic to get toY
                     Vector2i mousePos = Mouse::getPosition(window);
                     int newX = mousePos.x / TILE_SIZE;
                     int newY = mousePos.y / TILE_SIZE;
                     if (isMoveLegal(newX, newY, legalMoves, moveCount)) {
                         // Simulate the move
                         int tempPiece = board[newY][newX];
+                        bool isEnPassantMove = false;
+                        int capturedX = -1;
+                        int capturedY = -1;
+                        int movingPiece = board[dragPiece.y][dragPiece.x];
+                        bool movingPieceIsWhite = movingPiece >= 7;
+                        if ((movingPiece == 1 || movingPiece == 7) && tempPiece == 0 && newX != dragPiece.x &&
+                            enPassantAvailable && enPassantIsWhitePawn != movingPieceIsWhite &&
+                            dragPiece.y == enPassantY && newX == enPassantX) {
+                            capturedX = enPassantX;
+                            capturedY = dragPiece.y;
+                            tempPiece = board[capturedY][capturedX];
+                            board[capturedY][capturedX] = 0;
+                            isEnPassantMove = true;
+                        }
                         if (tempPiece != 0) { // If a piece is captured
                             if (tempPiece > 6) { // Black piece
                                 blackScore += getPieceValue(tempPiece);
@@ -689,8 +699,23 @@ int main() {
                             // Undo the move
                             board[dragPiece.y][dragPiece.x] = board[newY][newX];
                             board[newY][newX] = tempPiece;
+                            if (isEnPassantMove) {
+                                board[capturedY][capturedX] = tempPiece;
+                                board[newY][newX] = 0;
+                            }
                         }
                         else {
+                            if ((movingPiece == 1 || movingPiece == 7) && abs(newY - dragPiece.y) == 2) {
+                                enPassantAvailable = true;
+                                enPassantX = newX;
+                                enPassantY = newY;
+                                enPassantIsWhitePawn = movingPieceIsWhite;
+                            }
+                            else {
+                                enPassantAvailable = false;
+                                enPassantX = -1;
+                                enPassantY = -1;
+                            }
                             // Check if the opponent's king is in check or checkmate
                             if (isKingInCheck(!isWhiteTurn, board)) {
                                 checkSound.play();
