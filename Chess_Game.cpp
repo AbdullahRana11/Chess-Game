@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <cstdlib>
 using namespace sf;
 using namespace std;
 const int TILE_SIZE = 80;
@@ -12,6 +13,10 @@ const int MAX_MOVES = 64; // Maximum possible moves for a piece
 int moveCount = 0;
 int whiteScore = 0;
 int blackScore = 0;
+bool enPassantAvailable = false;
+int enPassantX = -1;
+int enPassantY = -1;
+bool enPassantIsWhitePawn = false;
 SoundBuffer moveSoundBuffer, captureSoundBuffer, startSoundBuffer, mateSoundBuffer, backmusicBuffer, promotionSoundBuffer, typingBuffer, clickBuffer, menuSoundBuffer;
 Sound moveSound, checkSound, startSound, mateSound, backmusic, captureSound, promotionSound;
 struct Move {
@@ -197,6 +202,13 @@ void getPawnMoves(int x, int y, int board[BOARD_SIZE][BOARD_SIZE], Move legalMov
     }
     if (isWithinBounds(x + 1, y + direction) && board[y + direction][x + 1] != 0 && ((isWhite && board[y + direction][x + 1] <= 6) || (!isWhite && board[y + direction][x + 1] >= 7))) {
         legalMoves[moveCount++] = { x + 1, y + direction };
+    }
+    // En passant capture
+    if (enPassantAvailable && enPassantIsWhitePawn != isWhite && y == enPassantY && abs(x - enPassantX) == 1) {
+        int targetY = y + direction;
+        if (isWithinBounds(enPassantX, targetY) && board[targetY][enPassantX] == 0) {
+            legalMoves[moveCount++] = { enPassantX, targetY };
+        }
     }
 }
 // Get moves for a rook
